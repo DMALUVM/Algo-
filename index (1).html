@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NQ Fibonacci Time–Price Helper</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>NQ Fibonacci Time–Price Helper (1‑Minute Execution)</h1>
+    <p class="subtitle">Price × Time × Liquidity — read the “algo” by aligning impulses with Fib price, Fib time counts, and macro windows.</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Inputs</h2>
+      <form id="form">
+        <div class="grid">
+          <label>
+            Impulse start price (A)
+            <input type="number" id="priceA" step="0.25" value="23784.00" required />
+          </label>
+          <label>
+            Impulse end price (B)
+            <input type="number" id="priceB" step="0.25" value="23850.00" required />
+          </label>
+          <label>
+            Impulse duration (bars, 1m) <small>(auto-calculated from times)</small>
+            <input type="number" id="bars" min="1" step="1" value="9" required />
+          </label>
+          <label>
+            Impulse start time (HH:MM, optional)
+            <input type="text" id="startTime" placeholder="10:03" />
+          </label>
+          <label>
+            Pivot end time (HH:MM, optional)
+            <input type="text" id="pivotTime" placeholder="10:12" />
+          </label>
+          <label>
+            Observed retrace price (optional)
+            <input type="number" id="retracePrice" step="0.25" placeholder="e.g. 23816.00" />
+          </label>
+          <label>
+            Observed retrace bars (optional)
+            <input type="number" id="retraceBars" min="1" step="1" placeholder="e.g. 8" />
+          </label>
+          <label>
+            Current time (HH:MM, optional)
+            <input type="text" id="nowTime" placeholder="10:30" />
+          </label>
+          <label>
+            Count tolerance (bars)
+            <input type="number" id="tolBars" min="0" step="1" value="2" />
+          </label>
+        </div>
+
+        <details class="adv">
+          <summary>Advanced: FVG / BPR / IFVG & Liquidity</summary>
+          <div class="grid">
+            <label>
+              FVG inside 0.5–0.618 (golden box)?
+              <input type="checkbox" id="flagFvgGolden" />
+            </label>
+            <label>
+              Untouched FVG in 0.618–0.786?
+              <input type="checkbox" id="flagFvgDeep" />
+            </label>
+            <label>
+              BPR overlapping 0.5–0.618?
+              <input type="checkbox" id="flagBprGolden" />
+            </label>
+            <label>
+              IFVG near sweep at 0.618–0.786?
+              <input type="checkbox" id="flagIfvgDeep" />
+            </label>
+            <label>
+              Both sides liquidity swept this hour?
+              <input type="checkbox" id="flagBothSidesSwept" />
+            </label>
+          </div>
+        </details>
+
+        <div class="grid">
+          <label>
+            HTF bias (manual toggle)
+            <select id="htfBias">
+              <option value="auto" selected>Auto (infer)</option>
+              <option value="bull">Bullish</option>
+              <option value="bear">Bearish</option>
+            </select>
+          </label>
+          <label>
+            Session preset
+            <select id="sessionPreset">
+              <option value="">—</option>
+              <option value="pre">7:00–8:30 (Pre-market)</option>
+              <option value="open">8:30–10:00 (First Expansion)</option>
+              <option value="mid">10:00–11:30 (Continuation/Reversal)</option>
+              <option value="lunch">11:30–13:00 (Lunch)</option>
+              <option value="pm">13:00–14:30 (Afternoon Expansion)</option>
+              <option value="close">14:30–16:00 (Final Sweep)</option>
+            </select>
+          </label>
+          <div class="fvghelper card mini">
+            <strong>FVG Helper</strong>
+            <div class="grid">
+              <label>Gap Top <input type="number" id="fvgTop" step="0.25" placeholder="e.g. 23860.00"></label>
+              <label>Gap Bottom <input type="number" id="fvgBottom" step="0.25" placeholder="e.g. 23852.50"></label>
+              <label>Direction
+                <select id="fvgDir">
+                  <option value="up" selected>Up gap (bullish imbalance)</option>
+                  <option value="down">Down gap (bearish imbalance)</option>
+                </select>
+              </label>
+            </div>
+            <button type="button" id="checkFvgBtn">Check Overlap</button>
+            <pre id="fvgOut"></pre>
+          </div>
+        </div>
+
+        <div class="btns">
+          <button type="submit" class="primary">Analyze</button>
+          <button type="button" id="resetBtn">Reset</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="output" class="card hidden">
+      <div class="badgeRow">
+        <span id="biasBadge" class="badge">Bias: —</span>
+        <span id="qualityBadge" class="badge">Quality: —</span>
+      </div>
+      <h2>Results</h2>
+      <div class="result-grid">
+        <div>
+          <h3>Impulse</h3>
+          <pre id="impulseOut"></pre>
+        </div>
+        <div>
+          <h3>Macro Window</h3>
+          <div id="macroOut" class="pill"></div>
+          <h3>Expected Retrace Bars (time)</h3>
+          <pre id="expBarsOut"></pre>
+        </div>
+        <div>
+          <h3>Retracement Levels</h3>
+          <pre id="retrOut"></pre>
+        </div>
+        <div>
+          <h3>Extension Targets</h3>
+          <pre id="extOut"></pre>
+        </div>
+        <div class="wide">
+          <h3>Fibonacci Time Counts from Pivot</h3>
+          <pre id="tcountsOut"></pre>
+        </div>
+        <div class="wide">
+          <h3>Assessment</h3>
+          <pre id="assessmentOut"></pre>
+        </div>
+        <div class="wide">
+          <h3>FVG/BPR/IFVG & Liquidity Guidance</h3>
+          <pre id="contextOut"></pre>
+        </div>
+        <div class="wide">
+          <h3>A+ Score</h3>
+          <pre id="scoreOut"></pre>
+          <div class="btns">
+            <button id="copyBtn">Copy Results</button>
+            <button id="downloadBtn">Download JSON</button>
+          </div>
+        </div>
+      </div>
+      <p class="hint">A+ confluence = price in <b>0.5–0.618</b> + time ≈ <b>0.382–0.618×</b> impulse + <b>13/21</b> count + liquidity sweep + trigger. No confluence = no trade.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>MIT Licensed • Built for static hosting (GitHub Pages). No data leaves your browser.</p>
+    <a href="https://github.com/" target="_blank" rel="noopener">Host on GitHub Pages</a>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
